@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>State Pavlov VR Server</title>
+    <!-- подключение ваших стилей и скриптов -->
+<style>
+    .rounds table {
+        border-collapse: collapse;
+        width: 100%;
+    }
+    .rounds th, .rounds td {
+        padding: 8px;
+        text-align: left;
+        border: 1px solid #ddd;
+    }
+    .rounds th {
+        background-color: #f2f2f2;
+    }
+    #footer {
+        text-align: center;
+        font-size: 11px;
+    }
+
+    table td {
+      vertical-align: middle;
+    }
+    .team-table td {
+      vertical-align: middle;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 8px;
+    }
+
+    th {
+      background-color: #f2f2f2;
+    }
+
+    tr:nth-child(even) {
+      background-color: #f2f2f2;
+    }
+
+    tr:hover {
+      background-color: #ddd;
+    }
+    a:hover {
+        color: gray;
+        }
+    a {
+        color: black;
+    }
+    a:visited {
+        text-decoration: false;
+    }
+    .my-link:active {
+        outline: none;
+        box-shadow: none;
+    }
+</style>
+<script src="static/ski.js"></script>
+</head>
+<body>
+    <header>
+        <!-- содержимое вашей шапки
+        <h1>Заголовок вашего сайта</h1>-->
+        <nav>
+            <ul>
+                <li><a href="#">Home</a></li>
+                <li><a href="{{ url_for('show_stats_users') }}">Users</a></li>
+                <li><a href="{{ url_for('show_stats_matchs') }}">Matchs</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <!-- содержимое страницы, которое будет отличаться для каждой страницы -->
+    {% block content %}{% endblock %}
+
+
+
+<footer id="footer">
+    © PiketZ 1945
+</footer>
+</body>
+
+</html>

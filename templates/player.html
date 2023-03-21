@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <h1>{{ player[1] }}</h1>
+    <table>
+      <tr>
+        <th>Statistic</th>
+        <th>Value</th>
+      </tr>
+      <tr>
+        <td>Matches Played:</td>
+        <td>{{ player[2] }}</td>
+      </tr>
+      <tr>
+        <td>Matches Win:</td>
+        <td>{{ match_wins[0] }}</td>
+      </tr>
+      <tr>
+        <td>WinRate %:</td>
+        <td>{{ winrate[0] }} %</td>
+      </tr>
+      <tr>
+        <td>Total Kills:</td>
+        <td>{{ player[4] }}</td>
+      </tr>
+      <tr>
+        <td>Total Deaths:</td>
+        <td>{{ player[5] }}</td>
+      </tr>
+      <tr>
+        <td>Kill-Death Ratio:</td>
+        <td>{{ player[6] }}</td>
+      </tr>
+      <tr>
+        <td>Total Assists:</td>
+        <td>{{ player[7] }}</td>
+      </tr>
+      <tr>
+        <td>Total Headshots:</td>
+        <td>{{ player[8] }}</td>
+      </tr>
+      <tr>
+        <td>Headshot Percentage:</td>
+        <td>{{ player[9] }} %</td>
+      </tr>
+      <tr>
+        <td>Total Bomb Plants:</td>
+        <td>{{ player[10] }}</td>
+      </tr>
+      <tr>
+        <td>Total Experience:</td>
+        <td>{{ player[11] }}</td>
+      </tr>
+    </table>
+    <h2>Matches Played</h2>
+    <table class="table_sort">
+      <tr>
+        <th onclick="sortTableByDate(0)">Date</th>
+        <th onclick="sortTable(1)">Map</th>
+        <th onclick="sortTable(1)">Server</th>
+        <th onclick="sortTable(10)">Game Mode</th>
+        <th onclick="sortTable(2)">Team CT Score</th>
+        <th onclick="sortTable(3)">Team T Score</th>
+        <th onclick="sortTable(4)">Kill</th>
+        <th onclick="sortTable(5)">Death</th>
+        <th onclick="sortTable(6)">K/D</th>
+        <th onclick="sortTable(7)">Bomb Planted</th>
+        <th onclick="sortTable(8)">Play on team</th>
+        <th onclick="sortTable(9)">Result</th>
+      </tr>
+      {% for match in matches %}
+      <tr>
+        <td title="{{ match[0] }}"><a href="{{ url_for('match', Timestamp=match[0]) }}">{{ match[0] }}</a></td>
+        <td>{{ match[2] }}</td>
+        <td>{{ match[3] }}</td>
+        <td>{{ match[4] }}</td>
+        <td>{{ match[5] }}</td>
+        <td>{{ match[6] }}</td>
+        <td>{{ match[7] }}</td>
+        <td>{{ match[8] }}</td>
+        <td>{{ match[9] }}</td>
+        <td>{{ match[10] }}</td>
+        <td>{{ match[11] }}</td>
+        <td>{{ match[12] }}</td>
+
+      </tr>
+      {% endfor %}
+    </table>
+
+<table>
+    <thead>
+        <tr>
+            <th>id</th>
+            <th>event</th>
+            <th>Timestamp</th>
+            <th>server</th>
+            <th>Killer</th>
+            <th>KillerTeamID</th>
+            <th>Killed</th>
+            <th>KilledTeamID</th>
+            <th>KilledBy</th>
+            <th>Headshot</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for kill in kills %}
+        <tr>
+            <td>{{ kill[0] }}</td>
+            <td>{{ kill[1] }}</td>
+            <td>{{ kill[2] }}</td>
+            <td>{{ kill[3] }}</td>
+            <td>{{ kill[4] }}</td>
+            <td>{{ kill[5] }}</td>
+            <td>{{ kill[6] }}</td>
+            <td>{{ kill[7] }}</td>
+            <td>{{ kill[8] }}</td>
+            <td>{{ kill[9] }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

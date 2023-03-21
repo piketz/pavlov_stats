@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block content %}
+    <h2>Users:</h2>
+    <table class="table_sort">
+        <thead>
+            <tr>
+
+                <th onclick='sortTable(0)'>Player Name</th>
+                <th onclick='sortTable(1)'>Games</th>
+                <th onclick='sortTable(2)'>Kill</th>
+                <th onclick='sortTable(3)'>Death</th>
+                <th onclick='sortTable(4)'>K/D</th>
+                <th onclick='sortTable(5)'>Assist</th>
+                <th onclick='sortTable(6)'>Headshot</th>
+                <th onclick='sortTable(7)'>% Headshot</th>
+                <th onclick='sortTable(8)'>% Winrate</th>
+                <th onclick='sortTable(9)'>Bomb Planted</th>
+                <th onclick='sortTable(10)'>Experience</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in match_users %}
+        <tr>
+            <td title="{{ row[1] }}"><a href="{{ url_for('player', name=row[1]) }}">{{ row[2] }}</a></td>
+            <td>{{ row[3] }}</td>
+            <td>{{ row[4] }}</td>
+            <td>{{ row[5] }}</td>
+            <td>{{ row[6] }}</td>
+            <td>{{ row[7] }}</td>
+            <td>{{ row[8] }}</td>
+            <td>{{ row[9] }} %</td>
+            <td>
+                {% for winrow in winrate %}
+                    {% if row[1] == winrow[0] %}
+                        {{ winrow[1]|default(0) }}
+                    {% endif %}
+                {% endfor %}
+            </td>
+            <td>{{ row[10] }}</td>
+            <td>{{ row[11] }}</td>
+
+        </tr>
+        {% endfor %}
+    </table>
+{% endblock %}

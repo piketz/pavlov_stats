@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+    <h2>Matches:</h2>
+    <table class="table_sort">
+        <thead>
+            <tr>
+                <th onclick="sortTableByDate(0)">Date</th>
+                <th onclick="sortTable(1)">Server</th>
+                <th onclick="sortTable(2)">Map Label</th>
+                <th onclick="sortTable(3)">Game Mode</th>
+                <th onclick="sortTable(4)">Player Count</th>
+                <th onclick="sortTable(5)">bTeams</th>
+                <th onclick="sortTable(6)">Team CT Score</th>
+                <th onclick="sortTable(7)">Team T Score</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in match %}
+            <tr class="match-row" onclick="getRounds_('{{ row[0] }}', '{{ row[1] }}')" class="match-row" data-timestamp="{{ row[0] }}">
+                <td title="{{ row[0] }}"><a href="{{ url_for('match', Timestamp=row[0]) }}">{{ row[0] }}</a></td>
+                <td>{{ row[1] }}</td>
+                <td>{{ row[2] }}</td>
+                <td>{{ row[3] }}</td>
+                <td>{{ row[4] }}</td>
+                <td>{{ row[5] }}</td>
+                <td>{{ row[6] }}</td>
+                <td>{{ row[7] }}</td>
+            </tr>
+
+            {% endfor %}
+        </tbody>
+    </table>
+
+{% endblock %}
+
+            <tr class="rounds-row"  style="display: none;">
+                    <td colspan="8" class="rounds" id="rounds_{{ row[0]  }}"></td>
+            </tr>
