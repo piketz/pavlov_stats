@@ -85,6 +85,12 @@ def create_db():
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         UGCname TEXT NOT NULL,
                         name TEXT)''')
+    c.execute(''' SELECT count(name) FROM sqlite_master WHERE type='table' AND name='player_name' ''')
+    if c.fetchone()[0] == 0:
+        c.execute('''CREATE TABLE player_name (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        steam_id TEXT UNIQUE NOT NULL,
+                        name TEXT)''')
     conn.close()
 
 def get_map_name_from_workshop_id(workshop_id):
@@ -103,6 +109,38 @@ def get_map_name_from_workshop_id(workshop_id):
             conn.commit()
             return map_name
 
+def get_player_name_from_id(steam_id):
+    #print(f'steam_id  = {steam_id}')
+    with sqlite3.connect(database) as conn:
+        c = conn.cursor()
+        c.execute("SELECT name FROM player_name WHERE steam_id=? LIMIT 1", (steam_id,))
+        row_player_name = c.fetchone()
+        if row_player_name is None:
+            c.execute("SELECT playerName FROM match_users WHERE uniqueId_player=? LIMIT 1", (steam_id,))
+            row_match_users = c.fetchone()
+
+        if row_player_name is not None:
+            return row_player_name[0]
+        elif row_match_users is not None:
+            print(f'if row_player_name is None: new steam_id = {steam_id} row_match_users = {row_match_users}')
+            c.execute("INSERT INTO player_name (steam_id, name) VALUES (?, ?)",
+                      (steam_id, row_match_users))
+            conn.commit()
+            return row_match_users[0]
+        else:
+            url = f"https://steamcommunity.com/profiles/{steam_id}/"
+            response = requests.get(url)
+            soup = BeautifulSoup(response.content, 'html.parser')
+            username_element = soup.find('span', {'class': 'actual_persona_name'})
+            print(username_element)
+            if username_element is None:
+                print("Не удалось найти имя пользователя на странице профиля Steam")
+                return None
+            else:
+                print(f'steam_id new = {steam_id}, new name = {username_element.text.strip()}')
+                c.execute("INSERT INTO player_name (steam_id, name) VALUES (?, ?)", (steam_id, username_element.text.strip()))
+                conn.commit()
+                return username_element.text.strip()
 
 def save_event_data_to_db(data, server_name):
     # print(f'save_event_data_to_db data {type(data)} = {data} server_name {type(server_name)} = {server_name}')
@@ -142,7 +180,7 @@ def save_event_data_to_db(data, server_name):
 
 
 def save_Kill_data_to_db(data, server_name):
-    # print(f'save_match_data_to_db data {type(data)} = {data} server_name {type(server_name)} = {server_name}')
+    #print(f'save_match_data_to_db data {type(data)} = {data} server_name {type(server_name)} = {server_name}')
     with sqlite3.connect(database) as conn:
         c = conn.cursor()
         c.execute(f"SELECT * FROM KillData WHERE Timestamp='{data['Timestamp']}'")
@@ -155,11 +193,26 @@ def save_Kill_data_to_db(data, server_name):
 
             """
             if 'KillData' in data:
-                c.execute(f"INSERT INTO KillData "
-                          f"(event, Timestamp, server, Killer, KillerTeamID, Killed, KilledTeamID, KilledBy, Headshot) VALUES "
-                          f"('KillData', '{data['Timestamp']}', '{server_name}', '{data['KillData']['Killer']}', "
-                          f"'{data['KillData']['KillerTeamID']}','{data['KillData']['Killed']}','{data['KillData']['KilledTeamID']}','{data['KillData']['KilledBy']}','{data['KillData']['Headshot']}')")
-            conn.commit()
+                killer_id = data['KillData']['Killer']
+                killed_by_id = data['KillData']['KilledBy']
+                c.execute("SELECT name FROM player_name WHERE steam_id=? LIMIT 1", (killer_id,))
+                killer_row = c.fetchone()
+                if killer_row is None:
+                    killer_name = get_player_name_from_id(killer_id)
+                   # c.execute("INSERT INTO player_name (steam_id, name) VALUES (?, ?)", (killer_id, killer_name))
+                    print(f'if killer_row is None: killer_name = {killer_name}')
+                c.execute("SELECT name FROM player_name WHERE steam_id=? LIMIT 1", (killed_by_id,))
+                killed_by_row = c.fetchone()
+                if killed_by_row is None:
+                    killed_by_name = get_player_name_from_id(killed_by_id)
+                    #c.execute("INSERT INTO player_name (steam_id, name) VALUES (?, ?)", (killed_by_id, killed_by_name))
+                    print(f'if killed_by_row is None: killed_by_row = {killer_name}')
+                c.execute(
+                    f"INSERT INTO KillData (event, Timestamp, server, Killer, KillerTeamID, Killed, KilledTeamID, KilledBy, Headshot) "
+                    f"VALUES ('KillData', '{data['Timestamp']}', '{server_name}', '{killer_id}', "
+                    f"'{data['KillData']['KillerTeamID']}', '{data['KillData']['Killed']}', "
+                    f"'{data['KillData']['KilledTeamID']}', '{killed_by_id}', '{data['KillData']['Headshot']}')")
+                conn.commit()
         else:
             pass
         #  print('no change KillData')
@@ -313,7 +366,7 @@ def player(name):
         "WHERE match.PlayerCount > 7 AND match_users.uniqueId_player = ?;", (name,))
     winrate = cur.fetchone()
 
-    cur.execute('SELECT * FROM KillData WHERE Killer = ? or Killed = ?', (name,name,))
+    cur.execute('SELECT Timestamp , server , Killer , KillerTeamID , Killed , KilledTeamID , KilledBy , Headshot FROM KillData WHERE Killer = ? or Killed = ?', (name,name,))
     kills = cur.fetchall()
 
 
@@ -332,11 +385,9 @@ def match(Timestamp):
         (Timestamp,))
     match = cur.fetchall()
 
-    for i in range(len(match)):
-        map_label = match[i][2]
-        if map_label.startswith("UGC"):
-            map_name = get_map_name_from_workshop_id(map_label)
-            match[i] = match[i][:2] + (map_name,) + match[i][3:]
+    match = list(
+        map(lambda x: (x[0], x[1], get_map_name_from_workshop_id(x[2]) if x[2].startswith("UGC") else x[2], x[3]),
+            match))
 
 
     cur.execute("SELECT playerName, teamId FROM match_users WHERE Timestamp = ?  ORDER BY teamId ASC", (Timestamp,))
@@ -370,11 +421,9 @@ def show_stats_matchs():
                 " FROM match ORDER BY Timestamp DESC")
     match = cur.fetchall()
 
-    for i in range(len(match)):
-        map_label = match[i][2]
-        if map_label.startswith("UGC"):
-            map_name = get_map_name_from_workshop_id(map_label)
-            match[i] = match[i][:2] + (map_name,) + match[i][3:]
+    match = list(
+        map(lambda x: (x[0], x[1], get_map_name_from_workshop_id(x[2]) if x[2].startswith("UGC") else x[2], x[3]),
+            match))
 
     return render_template('matchs.html', match=match)
 
@@ -415,12 +464,7 @@ def rounds(Timestamp):
                 "? AND Server = ? AND State = 'Ended';", (Server_name, Timestamp, Timestamp, Server_name,))
     #       0=id	1=event	2=Timestamp	3=server	4=State	5=Round	6=WinningTeam
     #rounds = [{'Round': row[5], 'WinningTeam': row[6]} for row in cur.fetchall()]
-    rounds = []
-    for row in cur.fetchall():
-        round_data = {'Round': row[5], 'Timestamp': row[2], 'WinningTeam': row[6]}
-        #print()
-        rounds.append(round_data)
-
+    rounds = list(map(lambda row: {'Round': row[5], 'Timestamp': row[2], 'WinningTeam': row[6]}, cur.fetchall()))
     conn.close()
     return jsonify(rounds)
 
