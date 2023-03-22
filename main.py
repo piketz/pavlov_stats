@@ -3,6 +3,8 @@ import json
 import platform
 import sqlite3
 from flask import Flask, g, render_template, request, jsonify
+from bs4 import BeautifulSoup
+import requests
 
 app = Flask(__name__)
 
@@ -77,7 +79,29 @@ def create_db():
                         server TEXT,
                         Player TEXT,
                         BombInteraction TEXT)''')
+    c.execute(''' SELECT count(name) FROM sqlite_master WHERE type='table' AND name='map_name' ''')
+    if c.fetchone()[0] == 0:
+        c.execute('''CREATE TABLE map_name (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        UGCname TEXT NOT NULL,
+                        name TEXT)''')
     conn.close()
+
+def get_map_name_from_workshop_id(workshop_id):
+    with sqlite3.connect(database) as conn:
+        c = conn.cursor()
+        c.execute("SELECT name FROM map_name WHERE UGCname=?", (workshop_id,))
+        row = c.fetchone()
+        if row is not None:
+            return row[0]
+        else:
+            workshop_url = f'https://steamcommunity.com/sharedfiles/filedetails/?id={workshop_id[3:]}'
+            response = requests.get(workshop_url)
+            soup = BeautifulSoup(response.content, 'html.parser')
+            map_name = soup.find('div', {'class': 'workshopItemTitle'}).text.strip()
+            c.execute("INSERT INTO map_name (UGCname, name) VALUES (?, ?)", (workshop_id, map_name))
+            conn.commit()
+            return map_name
 
 
 def save_event_data_to_db(data, server_name):
@@ -308,6 +332,13 @@ def match(Timestamp):
         (Timestamp,))
     match = cur.fetchall()
 
+    for i in range(len(match)):
+        map_label = match[i][2]
+        if map_label.startswith("UGC"):
+            map_name = get_map_name_from_workshop_id(map_label)
+            match[i] = match[i][:2] + (map_name,) + match[i][3:]
+
+
     cur.execute("SELECT playerName, teamId FROM match_users WHERE Timestamp = ?  ORDER BY teamId ASC", (Timestamp,))
     players = cur.fetchall()
 
@@ -338,6 +369,13 @@ def show_stats_matchs():
     cur.execute("SELECT Timestamp, server, MapLabel, GameMode, PlayerCount, bTeams, Team0Score, Team1Score "
                 " FROM match ORDER BY Timestamp DESC")
     match = cur.fetchall()
+
+    for i in range(len(match)):
+        map_label = match[i][2]
+        if map_label.startswith("UGC"):
+            map_name = get_map_name_from_workshop_id(map_label)
+            match[i] = match[i][:2] + (map_name,) + match[i][3:]
+
     return render_template('matchs.html', match=match)
 
 
