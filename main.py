@@ -385,9 +385,11 @@ def match(Timestamp):
         (Timestamp,))
     match = cur.fetchall()
 
-    match = list(
-        map(lambda x: (x[0], x[1], get_map_name_from_workshop_id(x[2]) if x[2].startswith("UGC") else x[2], x[3]),
-            match))
+    for i in range(len(match)):
+        map_label = match[i][2]
+        if map_label.startswith("UGC"):
+            map_name = get_map_name_from_workshop_id(map_label)
+            match[i] = match[i][:2] + (map_name,) + match[i][3:]
 
 
     cur.execute("SELECT playerName, teamId FROM match_users WHERE Timestamp = ?  ORDER BY teamId ASC", (Timestamp,))
@@ -421,9 +423,11 @@ def show_stats_matchs():
                 " FROM match ORDER BY Timestamp DESC")
     match = cur.fetchall()
 
-    match = list(
-        map(lambda x: (x[0], x[1], get_map_name_from_workshop_id(x[2]) if x[2].startswith("UGC") else x[2], x[3]),
-            match))
+    for i in range(len(match)):
+        map_label = match[i][2]
+        if map_label.startswith("UGC"):
+            map_name = get_map_name_from_workshop_id(map_label)
+            match[i] = match[i][:2] + (map_name,) + match[i][3:]
 
     return render_template('matchs.html', match=match)
 
