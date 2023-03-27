@@ -338,14 +338,13 @@ def run_parse_log_files():
 if __name__ == '__main__':
 
     create_db()
-    #parse_folder(logs_folder)
-    #flask_thread = threading.Thread(target=run_parse_log_files)
-   # flask_thread.start()
+    parse_folder(logs_folder)
+    pthread = threading.Thread(target=run_parse_log_files)
+    pthread.start()
 
-    tst_dict = { "KillData" : {"Killer": "76561198391655588", "KillerTeamID": 1, "Killed": "76561198391655584", "KilledTeamID": 1, "KilledBy": "de", "Headshot": True } ,
-                 "Timestamp": "2024.11.11-11.11.12" }
-
-    send_json(tst_dict, 'KillData')
+ #   tst_dict = { "KillData" : {"Killer": "76561198391655588", "KillerTeamID": 1, "Killed": "76561198391655584", "KilledTeamID": 1, "KilledBy": "de", "Headshot": True } ,
+ #                "Timestamp": "2024.11.11-11.11.12" }
+ #   send_json(tst_dict, 'KillData')
 
    # parse_log_files('Pavlov_fullstats.log')
 
