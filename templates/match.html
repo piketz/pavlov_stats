@@ -10,7 +10,7 @@
         <th>Map</th>
         <th>Game Mode</th>
         <th>Player Count</th>
-        <th>bTeams</th>
+    <!--    <th>bTeams</th>  -->
         <th>Team CT Score</th>
         <th>Team T Score</th>
       </tr>
@@ -21,7 +21,7 @@
         <td>{{ match[0][2] }}</td>
         <td>{{ match[0][3] }}</td>
         <td>{{ match[0][4] }}</td>
-        <td>{{ match[0][5] }}</td>
+      <!--  <td>{{ match[0][5] }}</td> -->
         <td>{{ match[0][6] }}</td>
         <td>{{ match[0][7] }}</td>
       </tr>
@@ -72,29 +72,23 @@
   {% endfor %}
 </table>
 
- <h2>dbg _ All kills:</h2>
+ <h2>All kills:</h2>
 <table>
     <thead>
         <tr>
             <th>Timestamp</th>
             <th>Killer</th>
-            <th>KillerTeamID</th>
-            <th>Killed</th>
-            <th>KilledTeamID</th>
             <th>KilledBy</th>
-            <th>Headshot</th>
+            <th>Killed</th>
         </tr>
     </thead>
     <tbody>
         {% for kill in kills %}
         <tr>
             <td>{{ kill[0] }}</td>
-            <td>{{ kill[1] }}</td>
-            <td>{{ kill[2] }}</td>
-            <td>{{ kill[3] }}</td>
-            <td>{{ kill[4] }}</td>
-            <td>{{ kill[5] }}</td>
-            <td>{{ kill[6] }}</td>
+            <td><a href="{{ url_for('player', name=kill[7]) }}"><span style="color: {{ 'blue' if kill[2] == 1 else 'red' }}">{{ kill[1] }}</span></a></td>
+            <td>{{ kill[5] }}  {% if kill[6] == "True" %}<img src="{{ url_for('static', filename='favicon.ico') }}" width="15" height="15">{% endif %}</td>
+            <td><a href="{{ url_for('player', name=kill[8]) }}"><span style="color: {{ 'blue' if kill[4] == 1 else 'red' }}">{{ kill[3] }}</span></a></td>
         </tr>
         {% endfor %}
     </tbody>

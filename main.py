@@ -6,7 +6,7 @@ from flask import Flask, g, render_template, request, jsonify
 from bs4 import BeautifulSoup
 import requests
 
-app = Flask(__name__)
+app = Flask(__name__, static_url_path='/static')
 
 database = 'stats.db'
 conn = sqlite3.connect(database)
@@ -351,7 +351,7 @@ def player(name):
         "WHERE match.PlayerCount > 7 AND match_users.uniqueId_player = ?;", (name,))
     winrate = cur.fetchone()
 
-    cur.execute('SELECT Timestamp , server , Killer , KillerTeamID , Killed , KilledTeamID , KilledBy , Headshot FROM KillData WHERE Killer = ? or Killed = ?', (name,name,))
+    cur.execute('SELECT Timestamp , server , Killer , KillerTeamID , Killed , KilledTeamID , KilledBy , Headshot, (SELECT name FROM player_name WHERE steam_id=Killer),  (SELECT name FROM player_name WHERE steam_id=Killed)  FROM KillData WHERE Killer = ? or Killed = ?', (name,name,))
     kills = cur.fetchall()
 
 
@@ -395,7 +395,7 @@ def match(Timestamp):
 
 
     cur.execute(
-        "SELECT Timestamp, (SELECT name FROM player_name WHERE steam_id=Killer), KillerTeamID, (SELECT name FROM player_name WHERE steam_id=Killed), KilledTeamID, KilledBy, Headshot "
+        "SELECT Timestamp, (SELECT name FROM player_name WHERE steam_id=Killer), KillerTeamID, (SELECT name FROM player_name WHERE steam_id=Killed), KilledTeamID, KilledBy, Headshot, Killer, Killed "
         "FROM KillData "
         "WHERE event = 'KillData' AND server = ? "
         "AND Timestamp >= (SELECT Timestamp FROM event WHERE event = 'RoundState' "
