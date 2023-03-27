@@ -89,8 +89,11 @@ def create_db():
     if c.fetchone()[0] == 0:
         c.execute('''CREATE TABLE player_name (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        steam_id TEXT UNIQUE NOT NULL,
+                        steam_id INTEGER NOT NULL,
                         name TEXT)''')
+    c.execute("SELECT name FROM sqlite_master WHERE type='index' AND name='player_name_steam_id_idx'")
+    if c.fetchone() is None:
+        c.execute("CREATE INDEX player_name_steam_id_idx ON player_name(steam_id)")
     conn.close()
 
 def get_map_name_from_workshop_id(workshop_id):
@@ -110,73 +113,56 @@ def get_map_name_from_workshop_id(workshop_id):
             return map_name
 
 def get_player_name_from_id(steam_id):
-    #print(f'steam_id  = {steam_id}')
     with sqlite3.connect(database) as conn:
         c = conn.cursor()
-        c.execute("SELECT name FROM player_name WHERE steam_id=? LIMIT 1", (steam_id,))
+        #c.execute("SELECT name FROM player_name WHERE steam_id=? LIMIT 1", (steam_id,))
+        c.execute("SELECT name FROM player_name INDEXED BY player_name_steam_id_idx WHERE steam_id=? LIMIT 1",
+                  (steam_id,))
         row_player_name = c.fetchone()
         if row_player_name is None:
             c.execute("SELECT playerName FROM match_users WHERE uniqueId_player=? LIMIT 1", (steam_id,))
             row_match_users = c.fetchone()
-
-        if row_player_name is not None:
-            return row_player_name[0]
-        elif row_match_users is not None:
-            print(f'if row_player_name is None: new steam_id = {steam_id} row_match_users = {row_match_users}')
-            c.execute("INSERT INTO player_name (steam_id, name) VALUES (?, ?)",
-                      (steam_id, row_match_users))
-            conn.commit()
-            return row_match_users[0]
-        else:
-            url = f"https://steamcommunity.com/profiles/{steam_id}/"
-            response = requests.get(url)
-            soup = BeautifulSoup(response.content, 'html.parser')
-            username_element = soup.find('span', {'class': 'actual_persona_name'})
-            print(username_element)
-            if username_element is None:
-                print("Не удалось найти имя пользователя на странице профиля Steam")
-                return None
-            else:
-                print(f'steam_id new = {steam_id}, new name = {username_element.text.strip()}')
-                c.execute("INSERT INTO player_name (steam_id, name) VALUES (?, ?)", (steam_id, username_element.text.strip()))
+            if row_match_users is not None and row_match_users[0] != '':
+                c.execute("INSERT INTO player_name (steam_id, name) VALUES (?, ?)",
+                          (steam_id, row_match_users[0]))
                 conn.commit()
-                return username_element.text.strip()
+                return row_match_users[0]
+            else:
+                url = f"https://steamcommunity.com/profiles/{steam_id}/"
+                response = requests.get(url)
+                soup = BeautifulSoup(response.content, 'html.parser')
+                username_element = soup.find('span', {'class': 'actual_persona_name'})
+                if username_element is None:
+                    print("Not found Steam name")
+                    return None
+                else:
+                    c.execute("INSERT INTO player_name (steam_id, name) VALUES (?, ?)", (steam_id, username_element.text.strip()))
+                    conn.commit()
+                    return username_element.text.strip()
+        else:
+            return row_player_name[0]
+
 
 def save_event_data_to_db(data, server_name):
     # print(f'save_event_data_to_db data {type(data)} = {data} server_name {type(server_name)} = {server_name}')
     with sqlite3.connect(database) as conn:
         c = conn.cursor()
-
         if "RoundState" in data:
-            # print(                f'data[RoundState][Timestamp] {type(data["RoundState"]["Timestamp"])} = {data["RoundState"]["Timestamp"]}')
             c.execute(f"SELECT * FROM event WHERE Timestamp='{data['RoundState']['Timestamp']}'")
         elif "RoundEnd" in data:
-            #  print(f'data[Timestamp] {type(data["Timestamp"])} = {data["Timestamp"]}')
             c.execute(f"SELECT * FROM event WHERE Timestamp='{data['Timestamp']}'")
-
         result = c.fetchone()
         if result is None:
-            #  print(f'saving to bd event ')
-            """
-             event,          Timestamp,            server      State,      Round,      WinningTeam
-             RoundState      2023.03.14-08.29.12   tsts        Starting     
-             RoundEnd        2023.03.14-08.29.28   tsts        Ended       10          1
-             """
             if 'RoundState' in data and data.get('RoundState', {}).get('State') != 'Ended':
-                # print(f'save to bd event RoundState')
                 c.execute(f"INSERT INTO event "
                           f"(event, Timestamp, server, State) VALUES "
                           f"('RoundState', '{data['RoundState']['Timestamp']}', '{server_name}', '{data['RoundState']['State']}')")
             elif 'RoundEnd' in data:
-                # print(f'save to bd event RoundEnd')
                 c.execute(f"INSERT INTO event "
                           f"(event, Timestamp, server, State, Round, WinningTeam) VALUES "
                           f"('RoundState', '{data['Timestamp']}', '{server_name}', 'Ended', "
                           f"'{data['RoundEnd']['Round']}','{data['RoundEnd']['WinningTeam']}')")
             conn.commit()
-        else:
-            pass
-        # print('no change event')
 
 
 def save_Kill_data_to_db(data, server_name):
@@ -286,12 +272,6 @@ def get_db():
     return db
 
 
-# @app.teardown_appcontext
-# def close_connection(exception):
-#    db = getattr(g, '_database', None)
-#    if db is not None:
-#        db.close()
-
 @app.route('/')
 def index_start_pge():
     return render_template('index.html')
@@ -312,6 +292,11 @@ def show_stats_users():
                 "SUM(COALESCE(Experience, 0)) AS total_experience "
                 "FROM match_users GROUP BY uniqueId_player ORDER BY count DESC;")
     match_users = cur.fetchall()
+
+    for i in range(len(match_users)):
+        user_id = match_users[i][1]
+        player_name = get_player_name_from_id(user_id)
+        match_users[i] = match_users[i][:2] + (player_name,) + match_users[i][3:]
 
     cur.execute(
         "SELECT uniqueId_player, ROUND(COALESCE(SUM(CASE WHEN teamId = (CASE WHEN Team0Score > Team1Score THEN 0 ELSE 1 END) THEN 1 ELSE 0 END), 0) * 100 / NULLIF(CAST(COUNT(*) AS FLOAT), 0), 2) AS win_rate FROM match_users INNER JOIN match ON match_users.Timestamp = match.Timestamp "
@@ -384,13 +369,15 @@ def match(Timestamp):
         "SELECT Timestamp, server, MapLabel, GameMode, PlayerCount, bTeams, Team0Score, Team1Score  FROM match WHERE  Timestamp = ?;",
         (Timestamp,))
     match = cur.fetchall()
+    server = match[0][1]
+    cur.execute("SELECT Timestamp FROM event WHERE event = 'RoundState' AND State = 'Start' AND server = ? AND Timestamp <= ? ORDER BY Timestamp DESC LIMIT 1;", (server,Timestamp,))
+    start_match_time = cur.fetchall()
 
     for i in range(len(match)):
         map_label = match[i][2]
         if map_label.startswith("UGC"):
             map_name = get_map_name_from_workshop_id(map_label)
             match[i] = match[i][:2] + (map_name,) + match[i][3:]
-
 
     cur.execute("SELECT playerName, teamId FROM match_users WHERE Timestamp = ?  ORDER BY teamId ASC", (Timestamp,))
     players = cur.fetchall()
@@ -406,13 +393,24 @@ def match(Timestamp):
     max_players_count = max(len(players_team0), len(players_team1))
     range_m = range(max(len(players_team0), len(players_team1)))
 
-    cur.execute('SELECT * FROM KillData')
+
+    cur.execute(
+        "SELECT Timestamp, (SELECT name FROM player_name WHERE steam_id=Killer), KillerTeamID, (SELECT name FROM player_name WHERE steam_id=Killed), KilledTeamID, KilledBy, Headshot "
+        "FROM KillData "
+        "WHERE event = 'KillData' AND server = ? "
+        "AND Timestamp >= (SELECT Timestamp FROM event WHERE event = 'RoundState' "
+        "                  AND State = 'Start' AND server = ? AND Timestamp <= ? "
+        "                  ORDER BY Timestamp DESC LIMIT 1) "
+        "AND Timestamp <= ? "
+        "ORDER BY Timestamp ASC;",
+        (server, server, Timestamp, Timestamp)
+    )
     kills = cur.fetchall()
 
     conn.close()
-    return render_template('match.html', match=match, players=players, range_m=range_m, len=len, max=max,
-                           max_players_count=max_players_count, players_team0=players_team0,
-                           players_team1=players_team1, kills=kills)
+    return render_template('match.html', match=match, start_match_time=start_match_time, players=players,
+                           range_m=range_m, len=len, max=max, max_players_count=max_players_count,
+                           players_team0=players_team0, players_team1=players_team1, kills=kills)
 
 
 @app.route('/matchs')

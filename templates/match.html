@@ -4,7 +4,8 @@
     <h1>Stats</h1>
     <table>
       <tr>
-        <th>Date</th>
+        <th>Start date</th>
+        <th>End date</th>
         <th>Server</th>
         <th>Map</th>
         <th>Game Mode</th>
@@ -14,6 +15,7 @@
         <th>Team T Score</th>
       </tr>
       <tr>
+        <td>{{ start_match_time[0][0] }}</td>
         <td>{{ match[0][0] }}</td>
         <td>{{ match[0][1] }}</td>
         <td>{{ match[0][2] }}</td>
@@ -74,10 +76,7 @@
 <table>
     <thead>
         <tr>
-            <th>id</th>
-            <th>event</th>
             <th>Timestamp</th>
-            <th>server</th>
             <th>Killer</th>
             <th>KillerTeamID</th>
             <th>Killed</th>
@@ -96,14 +95,10 @@
             <td>{{ kill[4] }}</td>
             <td>{{ kill[5] }}</td>
             <td>{{ kill[6] }}</td>
-            <td>{{ kill[7] }}</td>
-            <td>{{ kill[8] }}</td>
-            <td>{{ kill[9] }}</td>
         </tr>
         {% endfor %}
     </tbody>
 </table>
-
 
 
 {% endblock %}
