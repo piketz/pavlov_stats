@@ -166,7 +166,7 @@ def save_event_data_to_db(data, server_name):
 
 
 def save_Kill_data_to_db(data, server_name):
-    #print(f'save_match_data_to_db data {type(data)} = {data} server_name {type(server_name)} = {server_name}')
+    print(f'save_match_data_to_db data {type(data)} = {data} server_name {type(server_name)} = {server_name}')
     with sqlite3.connect(database) as conn:
         c = conn.cursor()
         c.execute(f"SELECT * FROM KillData WHERE Timestamp='{data['Timestamp']}'")
@@ -185,14 +185,14 @@ def save_Kill_data_to_db(data, server_name):
                 killer_row = c.fetchone()
                 if killer_row is None:
                     killer_name = get_player_name_from_id(killer_id)
-                   # c.execute("INSERT INTO player_name (steam_id, name) VALUES (?, ?)", (killer_id, killer_name))
+                    c.execute("INSERT INTO player_name (steam_id, name) VALUES (?, ?)", (killer_id, killer_name))
                     print(f'if killer_row is None: killer_name = {killer_name}')
                 c.execute("SELECT name FROM player_name WHERE steam_id=? LIMIT 1", (killed_by_id,))
                 killed_by_row = c.fetchone()
                 if killed_by_row is None:
                     killed_by_name = get_player_name_from_id(killed_by_id)
-                    #c.execute("INSERT INTO player_name (steam_id, name) VALUES (?, ?)", (killed_by_id, killed_by_name))
-                    print(f'if killed_by_row is None: killed_by_row = {killer_name}')
+                    c.execute("INSERT INTO player_name (steam_id, name) VALUES (?, ?)", (killed_by_id, killed_by_name))
+                    print(f'if killed_by_row is None: killed_by_row = {killed_by_name}')
                 c.execute(
                     f"INSERT INTO KillData (event, Timestamp, server, Killer, KillerTeamID, Killed, KilledTeamID, KilledBy, Headshot) "
                     f"VALUES ('KillData', '{data['Timestamp']}', '{server_name}', '{killer_id}', "
@@ -430,7 +430,7 @@ def show_stats_matchs():
     return render_template('matchs.html', match=match)
 
 
-@app.route('/data_in', methods=['POST'])
+@app.route('/data_in', methods=['PUT'])
 def receive_data():
     data = request.json.get('new_data')
     data_server_name = request.json.get('server_name')

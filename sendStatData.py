@@ -144,6 +144,10 @@ def parse_log_files(filepath):
                         data["Timestamp"] = Timestamp
                         #{"BombData": {"Player": "76561198124316469", "BombInteraction": "BombDefused"}}
                         save_Bomb_data_to_db(data)
+
+                    elif "SwitchTeam" in data:
+                        data["Timestamp"] = Timestamp
+                        save_SwitchTeam_data_to_db(data)
                     else:
                         send_json(data, 'unknown')
                         #print(f'Unknown data = {json.dumps(data)}')
@@ -151,6 +155,10 @@ def parse_log_files(filepath):
                 else:
                     text_json = text_json + line
     return data
+
+def save_SwitchTeam_data_to_db(data):
+    # {"SwitchTeam": {"PlayerID": "76561199013569210", "NewTeamID": 1}}
+    pass
 
 
 def save_match_data_to_db(data):
@@ -169,11 +177,6 @@ def save_match_data_to_db(data):
                     (data['Timestamp'], server_name, data['MapLabel'], data['GameMode'], data['PlayerCount'],
                      data['bTeams'], data['Team0Score'], data['Team1Score']))
                 conn.commit()
-            #            c.execute(f"INSERT INTO match (Timestamp, server, MapLabel, GameMode, "
-    #                      f"PlayerCount, bTeams, Team0Score, Team1Score) VALUES "
-    #                      f"('{data['Timestamp']}', '{server_name}', '{data['MapLabel']}', '{data['GameMode']}', "
-    #                      f"'{data['PlayerCount']}','{data['bTeams']}', '{data['Team0Score']}', '{data['Team1Score']}'")
-    #            conn.commit()
             else:
                 print('Error sending data match')
 
@@ -307,14 +310,19 @@ def send_json2(json_data, type_event):
 
 def send_json(json_data, type_event):
     if json_data:
-        data = {'new_data': json.dumps(json_data), 'server_name': server_name, 'type_event':type_event}
-        response = requests.post(url, json=data)
-        if response.status_code == 200:
-            print("Данные успешно отправлены!")
-            return True
-        else:
-            print(f"Произошла ошибка: {response.status_code}")
+        data = {'new_data': json.dumps(json_data), 'server_name': server_name, 'type_event': type_event}
+        try:
+            response = requests.put(url, json=data, timeout=50)
+            if response.status_code == 200:
+                print("Данные успешно отправлены!")
+                return True
+            else:
+                print(f"Произошла ошибка: {response.status_code}")
+                return False
+        except requests.exceptions.RequestException as e:
+            print(f"Произошла ошибка: {e}")
             return False
+
 
 def parse_folder(fldr_path):
     print('Parse all logs..')
