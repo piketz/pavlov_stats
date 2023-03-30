@@ -5,13 +5,14 @@ import sqlite3
 from flask import Flask, g, render_template, request, jsonify
 from bs4 import BeautifulSoup
 import requests
+from datetime import datetime
 
 app = Flask(__name__, static_url_path='/static')
 
 database = 'stats.db'
 conn = sqlite3.connect(database)
 time_refresh_parsing = 300
-server_name = 'local'
+# server_name = 'local'
 
 if platform.system() == 'Linux':
     logs_folder = '/home/ub/pavlovserver/Pavlov/Saved/Logs'
@@ -96,6 +97,89 @@ def create_db():
         c.execute("CREATE INDEX player_name_steam_id_idx ON player_name(steam_id)")
     conn.close()
 
+
+def get_dict_rnd(end_match, start_match, server_name):
+   # print(f'end_match = {end_match} start_match = {start_match}, server_name = {server_name}')
+    with sqlite3.connect(database) as conn:
+        # Выполнение запроса на получение данных
+        c = conn.cursor()
+        c.execute("SELECT Timestamp, round, WinningTeam FROM event WHERE server = ? AND State = 'Ended' AND Timestamp "
+                  ">= ? AND Timestamp <= ? ORDER BY Timestamp ASC;", (server_name, start_match, end_match))
+        events_data = c.fetchall()
+
+
+        round_data = {}
+        team0_score = 0
+        team1_score = 0
+        for row in events_data:
+            end_rnd = row[0]  # Время события
+            round_num = row[1]  # Номер раунда
+            win_team = row[2]  # WinningTeam
+
+            c = conn.cursor()
+            c.execute("SELECT Timestamp FROM event WHERE event = 'RoundState' AND State = 'Started' AND server = ? AND "
+                      "Timestamp <= ? ORDER BY Timestamp DESC LIMIT 1", (server_name, end_rnd,))
+            start_rnd = c.fetchall()
+
+            start_rnd_str = start_rnd[0][0]
+            start_rnd_time = datetime.strptime(start_rnd_str, '%Y.%m.%d-%H.%M.%S')
+            start_rnd_data = start_rnd_time.strftime('%Y.%m.%d-%H.%M.%S')
+
+            c.execute(
+                "SELECT Timestamp, (SELECT name FROM player_name WHERE steam_id=Killer), KillerTeamID, (SELECT name "
+                "FROM player_name WHERE steam_id=Killed), KilledTeamID, KilledBy, Headshot, Killer, Killed "
+                "FROM KillData "
+                "WHERE event = 'KillData' AND server = ? "
+                "AND Timestamp >= ? "
+                "AND Timestamp <= ? "
+                "ORDER BY Timestamp ASC;",
+                (server_name, start_rnd_data, end_rnd)
+            )
+            kills = c.fetchall()
+
+            if win_team == 0:
+                team0_score += 1
+            elif win_team == 1:
+                team1_score += 1
+
+            # Добавление данных в словарь
+            if round_num not in round_data:
+                round_data[round_num] = {'team0_score': 0, 'team1_score': 0, 'rnd_start': '', 'event': []}
+
+            round_data[round_num]['rnd_start'] = start_rnd_data
+            round_data[round_num]['team0_score'] = team0_score
+            round_data[round_num]['team1_score'] = team1_score
+
+
+            for row in kills:
+                kill_Timestamp = row[0]
+                kill_Killer = row[1]
+                kill_KillerTeamID = row[2]
+                kill_Killed = row[3]
+                kill_KilledTeamID = row[4]
+                kill_KilledBy = row[5]
+                kill_Headshot = row[6]
+                kill_Killer_id = row[7]
+                kill_Killed_id = row[8]
+
+                kill_Timestamp_str = kill_Timestamp
+                kill_Timestamp_time = datetime.strptime(kill_Timestamp_str, '%Y.%m.%d-%H.%M.%S')
+
+
+                new_time = str(kill_Timestamp_time - start_rnd_time)
+                event = {'time': new_time,
+                         'killer': kill_Killer, 'killer_id': kill_Killer_id,  'killer_Teamid': kill_KillerTeamID,
+                         'killed': kill_Killed, 'killed_id': kill_Killed_id, 'killed_Teamid': kill_KilledTeamID,
+                         'weapon': kill_KilledBy, 'Headshot': kill_Headshot}
+
+                if round_num not in round_data:
+                    round_data[round_num] = {'event': []}
+                round_data[round_num]['event'].append(event)
+
+    return round_data
+
+
+
 def get_map_name_from_workshop_id(workshop_id):
     with sqlite3.connect(database) as conn:
         c = conn.cursor()
@@ -112,10 +196,11 @@ def get_map_name_from_workshop_id(workshop_id):
             conn.commit()
             return map_name
 
+
 def get_player_name_from_id(steam_id):
     with sqlite3.connect(database) as conn:
         c = conn.cursor()
-        #c.execute("SELECT name FROM player_name WHERE steam_id=? LIMIT 1", (steam_id,))
+        # c.execute("SELECT name FROM player_name WHERE steam_id=? LIMIT 1", (steam_id,))
         c.execute("SELECT name FROM player_name INDEXED BY player_name_steam_id_idx WHERE steam_id=? LIMIT 1",
                   (steam_id,))
         row_player_name = c.fetchone()
@@ -136,7 +221,8 @@ def get_player_name_from_id(steam_id):
                     print("Not found Steam name")
                     return None
                 else:
-                    c.execute("INSERT INTO player_name (steam_id, name) VALUES (?, ?)", (steam_id, username_element.text.strip()))
+                    c.execute("INSERT INTO player_name (steam_id, name) VALUES (?, ?)",
+                              (steam_id, username_element.text.strip()))
                     conn.commit()
                     return username_element.text.strip()
         else:
@@ -203,7 +289,8 @@ def save_Kill_data_to_db(data, server_name):
             pass
         #  print('no change KillData')
 
-def save_Bomb_data_to_db(data):
+
+def save_Bomb_data_to_db(data, server_name):
     print(f'save_Bomb_data_to_db data {type(data)} = {data} server_name {type(server_name)} = {server_name}')
     with sqlite3.connect(database) as conn:
         c = conn.cursor()
@@ -351,13 +438,15 @@ def player(name):
         "WHERE match.PlayerCount > 7 AND match_users.uniqueId_player = ?;", (name,))
     winrate = cur.fetchone()
 
-    cur.execute('SELECT Timestamp , server , Killer , KillerTeamID , Killed , KilledTeamID , KilledBy , Headshot, (SELECT name FROM player_name WHERE steam_id=Killer),  (SELECT name FROM player_name WHERE steam_id=Killed)  FROM KillData WHERE Killer = ? or Killed = ?', (name,name,))
+    cur.execute(
+        'SELECT Timestamp , server , Killer , KillerTeamID , Killed , KilledTeamID , KilledBy , Headshot, (SELECT name FROM player_name WHERE steam_id=Killer),  (SELECT name FROM player_name WHERE steam_id=Killed)  FROM KillData WHERE Killer = ? or Killed = ?',
+        (name, name,))
     kills = cur.fetchall()
-
 
     conn.close()
 
-    return render_template('player.html', player=player, matches=matches, winrate=winrate, match_wins=match_wins, kills=kills)
+    return render_template('player.html', player=player, matches=matches, winrate=winrate, match_wins=match_wins,
+                           kills=kills)
 
 
 @app.route('/match/<Timestamp>')
@@ -370,7 +459,9 @@ def match(Timestamp):
         (Timestamp,))
     match = cur.fetchall()
     server = match[0][1]
-    cur.execute("SELECT Timestamp FROM event WHERE event = 'RoundState' AND State = 'Start' AND server = ? AND Timestamp <= ? ORDER BY Timestamp DESC LIMIT 1;", (server,Timestamp,))
+    cur.execute(
+        "SELECT Timestamp FROM event WHERE event = 'RoundState' AND State = 'Start' AND server = ? AND Timestamp <= ? ORDER BY Timestamp DESC LIMIT 1;",
+        (server, Timestamp,))
     start_match_time = cur.fetchall()
 
     for i in range(len(match)):
@@ -393,7 +484,6 @@ def match(Timestamp):
     max_players_count = max(len(players_team0), len(players_team1))
     range_m = range(max(len(players_team0), len(players_team1)))
 
-
     cur.execute(
         "SELECT Timestamp, (SELECT name FROM player_name WHERE steam_id=Killer), KillerTeamID, (SELECT name FROM player_name WHERE steam_id=Killed), KilledTeamID, KilledBy, Headshot, Killer, Killed "
         "FROM KillData "
@@ -407,8 +497,28 @@ def match(Timestamp):
     )
     kills = cur.fetchall()
 
+    #    cur.execute("SELECT Timestamp, round, WinningTeam FROM event WHERE server = ? AND State = 'Ended' AND Timestamp >= ? AND Timestamp <= ? ORDER BY Timestamp ASC;",
+    #        (server, Timestamp, start_match_time),
+    #    )
+    #    round_state = cur.fetchone()
+
+    #    cur.execute(
+    #        "SELECT Timestamp, SteamID, PlayerName FROM BombData "
+    #        "WHERE event = 'BombPlanted' AND server = ? "
+    #        "AND Timestamp >= (SELECT Timestamp FROM event WHERE event = 'RoundState' "
+    #        "                  AND State = 'FreezeTime' AND server = ? AND Timestamp <= ? "
+    #        "                  ORDER BY Timestamp DESC LIMIT 1) "
+    #        "AND Timestamp <= ? ORDER BY Timestamp ASC;",
+    #        (server, server, round_state[1], round_state[1]),
+    #    )
+    #    bomb_plant = cur.fetchone()
+
+   # round_data = {1: {'team0_score': 0, 'team1_score': 1, 'rnd_start': '2023.03.27-18.05.45', 'event': [{'time': '0:00:22', 'killer': 'STILBITE|youtube', 'killed': 'Plex', 'weapon': 'sock'}, {'time': '0:00:27', 'killer': 'STILBITE|youtube', 'killed': 'alex', 'weapon': 'sock'}, {'time': '0:00:51', 'killer': 'STILBITE|youtube', 'killed': 'X7XVendettaX7X', 'weapon': 'sock'}]}, 2: {'team0_score': 1, 'team1_score': 1, 'rnd_start': '2023.03.27-18.06.56', 'event': [{'time': '0:00:34', 'killer': 'X7XVendettaX7X', 'killed': 'Sin_Of_Bob', 'weapon': 'AK47'}, {'time': '0:00:41', 'killer': '[TL] Kungfusnail', 'killed': 'X7XVendettaX7X', 'weapon': 'AR'}, {'time': '0:00:47', 'killer': 'STILBITE|youtube', 'killed': '[VA] Hecktor 24', 'weapon': 'AK47'}, {'time': '0:00:50', 'killer': 'SirRobertsOBE', 'killed': '[TL] Kungfusnail', 'weapon': '57'}, {'time': '0:00:56', 'killer': 'Plex', 'killed': 'STILBITE|youtube', 'weapon': 'SMG'}]}, 3: {'team0_score': 2, 'team1_score': 1, 'rnd_start': '2023.03.27-18.08.12', 'event': [{'time': '0:00:14', 'killer': 'X7XVendettaX7X', 'killed': '[VA] Hecktor 24', 'weapon': 'AK47'}, {'time': '0:00:32', 'killer': 'SirRobertsOBE', 'killed': '[TL] Kungfusnail', 'weapon': 'AR'}, {'time': '0:00:40', 'killer': 'SirRobertsOBE', 'killed': 'STILBITE|youtube', 'weapon': 'AR'}, {'time': '0:00:42', 'killer': 'SirRobertsOBE', 'killed': 'Sin_Of_Bob', 'weapon': 'AR'}]}, 4: {'team0_score': 3, 'team1_score': 1, 'rnd_start': '2023.03.27-18.09.15', 'event': [{'time': '0:00:13', 'killer': 'SirRobertsOBE', 'killed': '[TL] Kungfusnail', 'weapon': 'AR'}, {'time': '0:00:17', 'killer': 'Plex', 'killed': 'Sin_Of_Bob', 'weapon': 'AK47'}, {'time': '0:00:18', 'killer': 'Gatto_nero', 'killed': '[VA] Hecktor 24', 'weapon': 'AK47'}, {'time': '0:00:29', 'killer': 'STILBITE|youtube', 'killed': 'Gatto_nero', 'weapon': 'AK47'}]}, 5: {'team0_score': 4, 'team1_score': 1, 'rnd_start': '2023.03.27-18.11.24', 'event': [{'time': '0:00:17', 'killer': 'SirRobertsOBE', 'killed': '[VA] Hecktor 24', 'weapon': 'AR'}, {'time': '0:00:25', 'killer': 'X7XVendettaX7X', 'killed': 'STILBITE|youtube', 'weapon': 'AK47'}, {'time': '0:01:00', 'killer': 'Plex', 'killed': '[TL] Kungfusnail', 'weapon': 'AK47'}, {'time': '0:01:06', 'killer': 'Plex', 'killed': 'Sin_Of_Bob', 'weapon': 'AK47'}]}, 6: {'team0_score': 4, 'team1_score': 2, 'rnd_start': '2023.03.27-18.12.50', 'event': [{'time': '0:00:24', 'killer': 'Sin_Of_Bob', 'killed': 'SirRobertsOBE', 'weapon': 'AK47'}, {'time': '0:00:34', 'killer': 'STILBITE|youtube', 'killed': 'X7XVendettaX7X', 'weapon': 'AK47'}, {'time': '0:00:41', 'killer': '[VA] Hecktor 24', 'killed': 'Plex', 'weapon': 'AK47'}, {'time': '0:00:59', 'killer': 'Gatto_nero', 'killed': '[VA] Hecktor 24', 'weapon': 'AK47'}, {'time': '0:01:00', 'killer': '[VA] Hecktor 24', 'killed': 'Gatto_nero', 'weapon': 'AK47'}]}, 7: {'team0_score': 5, 'team1_score': 2, 'rnd_start': '2023.03.27-18.14.10', 'event': [{'time': '0:00:18', 'killer': 'SirRobertsOBE', 'killed': 'Sin_Of_Bob', 'weapon': 'AR'}, {'time': '0:00:37', 'killer': 'SirRobertsOBE', 'killed': '[TL] Kungfusnail', 'weapon': 'AR'}, {'time': '0:00:38', 'killer': 'STILBITE|youtube', 'killed': 'SirRobertsOBE', 'weapon': 'AR'}, {'time': '0:00:43', 'killer': 'X7XVendettaX7X', 'killed': 'STILBITE|youtube', 'weapon': 'AR'}, {'time': '0:01:25', 'killer': '[VA] Hecktor 24', 'killed': 'Plex', 'weapon': 'AK47'}, {'time': '0:02:06', 'killer': 'Gatto_nero', 'killed': '[VA] Hecktor 24', 'weapon': 'AK47'}]}, 8: {'team0_score': 6, 'team1_score': 2, 'rnd_start': '2023.03.27-18.16.55', 'event': [{'time': '0:00:17', 'killer': 'Plex', 'killed': '[VA] Hecktor 24', 'weapon': 'AK47'}, {'time': '0:00:27', 'killer': 'SirRobertsOBE', 'killed': 'Richard The Lionfart', 'weapon': 'AR'}, {'time': '0:00:36', 'killer': 'SirRobertsOBE', 'killed': 'Sin_Of_Bob', 'weapon': 'AR'}, {'time': '0:00:42', 'killer': 'STILBITE|youtube', 'killed': 'X7XVendettaX7X', 'weapon': 'AR'}, {'time': '0:01:01', 'killer': 'Gatto_nero', 'killed': 'STILBITE|youtube', 'weapon': 'AK47'}]}, 9: {'team0_score': 6, 'team1_score': 3, 'rnd_start': '2023.03.27-18.18.17', 'event': [{'time': '0:00:17', 'killer': 'SirRobertsOBE', 'killed': 'Richard The Lionfart', 'weapon': 'AR'}, {'time': '0:00:23', 'killer': '[VA] Hecktor 24', 'killed': 'SirRobertsOBE', 'weapon': 'akshorty'}, {'time': '0:00:25', 'killer': '[VA] Hecktor 24', 'killed': 'Wendel Horatio', 'weapon': 'akshorty'}, {'time': '0:00:51', 'killer': 'STILBITE|youtube', 'killed': 'X7XVendettaX7X', 'weapon': 'AK47'}, {'time': '0:01:00', 'killer': '[VA] Hecktor 24', 'killed': 'Gatto_nero', 'weapon': 'AR'}, {'time': '0:01:03', 'killer': 'Plex', 'killed': '[TL] Kungfusnail', 'weapon': 'AK47'}, {'time': '0:01:08', 'killer': 'Plex', 'killed': 'STILBITE|youtube', 'weapon': 'AK47'}, {'time': '0:01:11', 'killer': 'Plex', 'killed': '[VA] Hecktor 24', 'weapon': 'AK47'}, {'time': '0:01:13', 'killer': 'Sin_Of_Bob', 'killed': 'Plex', 'weapon': 'akshorty'}]}, 10: {'team0_score': 7, 'team1_score': 3, 'rnd_start': '2023.03.27-18.19.51', 'event': [{'time': '0:00:19', 'killer': 'SirRobertsOBE', 'killed': '[VA] Hecktor 24', 'weapon': 'cet9'}, {'time': '0:00:23', 'killer': 'X7XVendettaX7X', 'killed': 'Sin_Of_Bob', 'weapon': 'm9'}, {'time': '0:00:49', 'killer': 'STILBITE|youtube', 'killed': "xj39 El'Diablo", 'weapon': 'sock'}, {'time': '0:00:55', 'killer': '[TL] Kungfusnail', 'killed': '[TL] Kungfusnail', 'weapon': 'grenade_ru'}, {'time': '0:01:05', 'killer': 'SirRobertsOBE', 'killed': 'STILBITE|youtube', 'weapon': 'cet9'}]}, 11: {'team0_score': 7, 'team1_score': 4, 'rnd_start': '2023.03.27-18.21.16', 'event': [{'time': '0:00:12', 'killer': 'Rfl', 'killed': 'Gatto_nero', 'weapon': 'AR'}, {'time': '0:00:19', 'killer': 'Rfl', 'killed': 'SirRobertsOBE', 'weapon': 'AR'}, {'time': '0:00:22', 'killer': 'Plex', 'killed': '[VA] Hecktor 24', 'weapon': 'SMG'}, {'time': '0:00:26', 'killer': 'STILBITE|youtube', 'killed': 'Plex', 'weapon': 'SMG'}, {'time': '0:00:28', 'killer': "xj39 El'Diablo", 'killed': 'STILBITE|youtube', 'weapon': 'AR'}, {'time': '0:00:52', 'killer': '[TL] Kungfusnail', 'killed': 'much.zen', 'weapon': 'SMG'}]}, 12: {'team0_score': 7, 'team1_score': 5, 'rnd_start': '2023.03.27-18.22.28', 'event': [{'time': '0:00:17', 'killer': 'Plex', 'killed': 'Sin_Of_Bob', 'weapon': 'AK47'}, {'time': '0:00:23', 'killer': 'STILBITE|youtube', 'killed': 'Gatto_nero', 'weapon': 'AR'}, {'time': '0:00:30', 'killer': 'X7XVendettaX7X', 'killed': 'little witch', 'weapon': 'AK47'}, {'time': '0:00:31', 'killer': '[TL] Kungfusnail', 'killed': 'Plex', 'weapon': 'AR'}, {'time': '0:00:36', 'killer': '[VA] Hecktor 24', 'killed': 'SirRobertsOBE', 'weapon': 'AK47'}, {'time': '0:00:38', 'killer': 'Rfl', 'killed': 'X7XVendettaX7X', 'weapon': 'AR'}, {'time': '0:00:50', 'killer': '[VA] Hecktor 24', 'killed': "xj39 El'Diablo", 'weapon': 'AK47'}, {'time': '0:00:59', 'killer': 'Rfl', 'killed': 'much.zen', 'weapon': 'AR'}]}, 13: {'team0_score': 7, 'team1_score': 6, 'rnd_start': '2023.03.27-18.23.47', 'event': [{'time': '0:00:35', 'killer': '[TL] Kungfusnail', 'killed': 'Plex', 'weapon': 'AR'}, {'time': '0:00:37', 'killer': 'X7XVendettaX7X', 'killed': 'Sin_Of_Bob', 'weapon': 'AK47'}, {'time': '0:00:41', 'killer': '[TL] Kungfusnail', 'killed': 'much.zen', 'weapon': 'AR'}, {'time': '0:00:44', 'killer': '[VA] Hecktor 24', 'killed': "xj39 El'Diablo", 'weapon': 'AK47'}, {'time': '0:00:50', 'killer': 'little witch', 'killed': 'SirRobertsOBE', 'weapon': 'AK47'}, {'time': '0:01:12', 'killer': 'Gatto_nero', 'killed': 'STILBITE|youtube', 'weapon': 'AK47'}, {'time': '0:01:20', 'killer': 'Gatto_nero', 'killed': '[TL] Kungfusnail', 'weapon': 'AK47'}]}, 14: {'team0_score': 7, 'team1_score': 7, 'rnd_start': '2023.03.27-18.25.56', 'event': [{'time': '0:00:23', 'killer': 'Gatto_nero', 'killed': 'little witch', 'weapon': 'AK47'}, {'time': '0:00:28', 'killer': 'Gatto_nero', 'killed': 'Sin_Of_Bob', 'weapon': 'AK47'}, {'time': '0:00:29', 'killer': '[VA] Hecktor 24', 'killed': 'X7XVendettaX7X', 'weapon': 'AK47'}, {'time': '0:00:31', 'killer': 'SirRobertsOBE', 'killed': '[VA] Hecktor 24', 'weapon': 'AR'}, {'time': '0:00:34', 'killer': 'STILBITE|youtube', 'killed': 'much.zen', 'weapon': 'AR'}, {'time': '0:00:35', 'killer': "xj39 El'Diablo", 'killed': 'STILBITE|youtube', 'weapon': 'AK47'}, {'time': '0:01:08', 'killer': 'Plex', 'killed': '[TL] Kungfusnail', 'weapon': 'AK47'}, {'time': '0:01:51', 'killer': 'Rfl', 'killed': "xj39 El'Diablo", 'weapon': 'AR'}, {'time': '0:01:54', 'killer': 'Rfl', 'killed': 'Plex', 'weapon': 'AR'}]}, 15: {'team0_score': 7, 'team1_score': 8, 'rnd_start': '2023.03.27-18.28.16', 'event': [{'time': '0:00:15', 'killer': 'Gatto_nero', 'killed': 'Rfl', 'weapon': 'AK47'}, {'time': '0:00:23', 'killer': 'Gatto_nero', 'killed': 'Sin_Of_Bob', 'weapon': 'AK47'}, {'time': '0:00:29', 'killer': 'SirRobertsOBE', 'killed': '[VA] Hecktor 24', 'weapon': 'AR'}, {'time': '0:00:31', 'killer': 'Gatto_nero', 'killed': 'little witch', 'weapon': 'AK47'}, {'time': '0:00:34', 'killer': '[TL] Kungfusnail', 'killed': 'Gatto_nero', 'weapon': 'AR'}, {'time': '0:00:49', 'killer': 'STILBITE|youtube', 'killed': "xj39 El'Diablo", 'weapon': 'AK47'}, {'time': '0:01:01', 'killer': 'STILBITE|youtube', 'killed': 'Plex', 'weapon': 'AK47'}, {'time': '0:01:05', 'killer': '[TL] Kungfusnail', 'killed': 'much.zen', 'weapon': 'AR'}, {'time': '0:01:30', 'killer': '[TL] Kungfusnail', 'killed': 'X7XVendettaX7X', 'weapon': 'AR'}]}, 16: {'team0_score': 8, 'team1_score': 8, 'rnd_start': '2023.03.27-18.30.07', 'event': [{'time': '0:00:24', 'killer': '[VA] Hecktor 24', 'killed': 'X7XVendettaX7X', 'weapon': 'AR'}, {'time': '0:00:26', 'killer': 'Gatto_nero', 'killed': '[VA] Hecktor 24', 'weapon': 'AK47'}, {'time': '0:00:32', 'killer': 'Plex', 'killed': 'Sin_Of_Bob', 'weapon': 'AK47'}, {'time': '0:00:33', 'killer': 'Rfl', 'killed': 'Plex', 'weapon': 'AR'}, {'time': '0:00:34', 'killer': 'STILBITE|youtube', 'killed': 'Gatto_nero', 'weapon': 'AK47'}, {'time': '0:00:48', 'killer': 'SirRobertsOBE', 'killed': '[TL] Kungfusnail', 'weapon': 'AR'}, {'time': '0:00:57', 'killer': 'STILBITE|youtube', 'killed': 'much.zen', 'weapon': 'AK47'}, {'time': '0:01:14', 'killer': "xj39 El'Diablo", 'killed': 'little witch', 'weapon': 'm16'}, {'time': '0:01:24', 'killer': 'STILBITE|youtube', 'killed': "xj39 El'Diablo", 'weapon': 'AK47'}, {'time': '0:02:04', 'killer': 'SirRobertsOBE', 'killed': 'STILBITE|youtube', 'weapon': 'AR'}, {'time': '0:02:05', 'killer': 'SirRobertsOBE', 'killed': 'Rfl', 'weapon': 'AR'}]}, 17: {'team0_score': 8, 'team1_score': 9, 'rnd_start': '2023.03.27-18.32.33', 'event': [{'time': '0:00:17', 'killer': 'Plex', 'killed': '[VA] Hecktor 24', 'weapon': 'AR'}, {'time': '0:00:21', 'killer': 'Gatto_nero', 'killed': 'little witch', 'weapon': 'AK47'}, {'time': '0:00:22', 'killer': 'Rfl', 'killed': 'Gatto_nero', 'weapon': 'AR'}, {'time': '0:00:26', 'killer': 'STILBITE|youtube', 'killed': 'Plex', 'weapon': 'AR'}, {'time': '0:00:29', 'killer': 'STILBITE|youtube', 'killed': "xj39 El'Diablo", 'weapon': 'AR'}, {'time': '0:00:33', 'killer': '[TL] Kungfusnail', 'killed': 'much.zen', 'weapon': 'ak12'}, {'time': '0:00:51', 'killer': 'Rfl', 'killed': 'SirRobertsOBE', 'weapon': 'AR'}]}, 18: {'team0_score': 8, 'team1_score': 10, 'rnd_start': '2023.03.27-18.33.44', 'event': [{'time': '0:00:22', 'killer': 'Gatto_nero', 'killed': 'Sin_Of_Bob', 'weapon': 'AK47'}, {'time': '0:00:29', 'killer': '[TL] Kungfusnail', 'killed': 'X7XVendettaX7X', 'weapon': 'ak12'}, {'time': '0:00:30', 'killer': '[TL] Kungfusnail', 'killed': 'SirRobertsOBE', 'weapon': 'ak12'}, {'time': '0:00:31', 'killer': 'STILBITE|youtube', 'killed': 'Gatto_nero', 'weapon': 'AR'}, {'time': '0:00:34', 'killer': 'Rfl', 'killed': 'Plex', 'weapon': 'AR'}, {'time': '0:01:33', 'killer': '[VA] Hecktor 24', 'killed': 'much.zen', 'weapon': 'AR'}]}}
+    round_data = get_dict_rnd(Timestamp, start_match_time[0][0], server)
+
     conn.close()
-    return render_template('match.html', match=match, start_match_time=start_match_time, players=players,
+    return render_template('match.html', match=match, round_data=round_data, start_match_time=start_match_time,
+                           players=players,
                            range_m=range_m, len=len, max=max, max_players_count=max_players_count,
                            players_team0=players_team0, players_team1=players_team1, kills=kills)
 
@@ -446,7 +556,7 @@ def receive_data():
         elif data_type_event == 'KillData':
             save_Kill_data_to_db(json.loads(data), data_server_name)
         elif data_type_event == 'BombData':
-            save_Bomb_data_to_db(json.loads(data))
+            save_Bomb_data_to_db(json.loads(data), data_server_name)
         else:
             print(f'[ERR] Приняты неизвестные данные  {data_type_event} =  {data}')
 
@@ -465,7 +575,7 @@ def rounds(Timestamp):
                 "Server = ? AND Timestamp <= ? ORDER BY Timestamp DESC LIMIT 1) AND "
                 "? AND Server = ? AND State = 'Ended';", (Server_name, Timestamp, Timestamp, Server_name,))
     #       0=id	1=event	2=Timestamp	3=server	4=State	5=Round	6=WinningTeam
-    #rounds = [{'Round': row[5], 'WinningTeam': row[6]} for row in cur.fetchall()]
+    # rounds = [{'Round': row[5], 'WinningTeam': row[6]} for row in cur.fetchall()]
     rounds = list(map(lambda row: {'Round': row[5], 'Timestamp': row[2], 'WinningTeam': row[6]}, cur.fetchall()))
     conn.close()
     return jsonify(rounds)

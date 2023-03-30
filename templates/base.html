@@ -5,6 +5,38 @@
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
     <!-- подключение ваших стилей и скриптов -->
 <style>
+
+    .table {
+      display: table;
+      border-collapse: collapse;
+      width: 100%;
+      table-layout: fixed;
+      vertical-align: middle;
+    }
+
+    .row {
+      display: table-row;
+    }
+
+    .row:nth-child(even) {
+      background-color: #f2f2f2;
+    }
+
+    .header {
+      font-weight: bold;
+    }
+
+    .cell {
+      display: table-cell;
+      padding: 5px;
+      overflow: hidden;
+      width: 5%;
+    }
+
+    .cell:nth-child(even) {
+      background-color: #f2f2f2;
+    }
+
     .rounds table {
         border-collapse: collapse;
         width: 100%;

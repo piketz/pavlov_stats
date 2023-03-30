@@ -71,7 +71,37 @@
   </tr>
   {% endfor %}
 </table>
+<div class="table">
+  {% for round, data in round_data.items() %}
+    <h2>Round: {{ round }} &nbsp;  {{ data['team0_score'] }}:{{ data['team1_score'] }}</h2>
+  <!--  <div class="row header">
+      <div class="cell">Time</div>
+      <div class="cell">Killer</div>
+      <div class="cell">Killed</div>
+      <div class="cell">Weapon</div>
+      {% if data['bomb_planted'] %}
+        <div class="cell">Bomb Planted</div>
+      {% endif %}
+      -->
+    </div>
+    {% for event in data['event'] %}
+      <div class="row">
+        <div class="cell">{{ event['time'] }}</div>
+        {% if event['bomb_by'] %}
+          <div class="cell">Bomb</div>
+          <div class="cell">{{ event['bomb_by'] }}</div>
+          <div class="cell">{{ event['bomb_event'] }}</div>
+        {% else %}
+          <div class="cell"><a href="{{ url_for('player', name=event['killer_id']) }}"><span style="color: {{ 'blue' if event['killer_Teamid'] == 1 else 'red' }}">{{ event['killer'] }}</span></a></div>
+          <div class="cell">{{ event['weapon'] }}  {% if event['Headshot'] == "True" %}<img src="{{ url_for('static', filename='favicon.ico') }}" width="15" height="15">{% endif %}</div>
+          <div class="cell"><a href="{{ url_for('player', name=event['killed_id']) }}"><span style="color: {{ 'blue' if event['killed_Teamid'] == 1 else 'red' }}">{{ event['killed'] }}</span></a></div>
+        {% endif %}
+      </div>
+    {% endfor %}
+  {% endfor %}
+</div>
 
+<!---
  <h2>All kills:</h2>
 <table>
     <thead>
@@ -93,6 +123,6 @@
         {% endfor %}
     </tbody>
 </table>
-
+--->
 
 {% endblock %}
