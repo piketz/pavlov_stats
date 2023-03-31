@@ -92,9 +92,9 @@
           <div class="cell">{{ event['bomb_by'] }}</div>
           <div class="cell">{{ event['bomb_event'] }}</div>
         {% else %}
-          <div class="cell"><a href="{{ url_for('player', name=event['killer_id']) }}"><span style="color: {{ 'blue' if event['killer_Teamid'] == 1 else 'red' }}">{{ event['killer'] }}</span></a></div>
+          <div class="cell"><a href="{{ url_for('player', name=event['killer_id']) }}"><span style="color: {{ 'blue' if event['killer_Teamid'] == 0 else 'red' }}">{{ event['killer'] }}</span></a></div>
           <div class="cell">{{ event['weapon'] }}  {% if event['Headshot'] == "True" %}<img src="{{ url_for('static', filename='favicon.ico') }}" width="15" height="15">{% endif %}</div>
-          <div class="cell"><a href="{{ url_for('player', name=event['killed_id']) }}"><span style="color: {{ 'blue' if event['killed_Teamid'] == 1 else 'red' }}">{{ event['killed'] }}</span></a></div>
+          <div class="cell"><a href="{{ url_for('player', name=event['killed_id']) }}"><span style="color: {{ 'blue' if event['killed_Teamid'] == 0 else 'red' }}">{{ event['killed'] }}</span></a></div>
         {% endif %}
       </div>
     {% endfor %}

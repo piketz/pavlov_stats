@@ -21,35 +21,35 @@
       </tr>
       <tr>
         <td>Total Kills:</td>
-        <td>{{ player[4] }}</td>
+        <td>{{ player[3] }}</td>
       </tr>
       <tr>
         <td>Total Deaths:</td>
-        <td>{{ player[5] }}</td>
+        <td>{{ player[4] }}</td>
       </tr>
       <tr>
         <td>Kill-Death Ratio:</td>
-        <td>{{ player[6] }}</td>
+        <td>{{ player[5] }}</td>
       </tr>
       <tr>
         <td>Total Assists:</td>
-        <td>{{ player[7] }}</td>
+        <td>{{ player[6] }}</td>
       </tr>
       <tr>
         <td>Total Headshots:</td>
-        <td>{{ player[8] }}</td>
+        <td>{{ player[7] }}</td>
       </tr>
       <tr>
         <td>Headshot Percentage:</td>
-        <td>{{ player[9] }} %</td>
+        <td>{{ player[8] }} %</td>
       </tr>
       <tr>
         <td>Total Bomb Plants:</td>
-        <td>{{ player[10] }}</td>
+        <td>{{ player[9] }}</td>
       </tr>
       <tr>
         <td>Total Experience:</td>
-        <td>{{ player[11] }}</td>
+        <td>{{ player[10] }}</td>
       </tr>
     </table>
     <h2>Matches Played</h2>
@@ -103,9 +103,9 @@
         <tr>
             <td>{{ kill[0] }}</td>
             <td>{{ kill[1] }}</td>
-            <td><a href="{{ url_for('player', name=kill[2]) }}"><span style="color: {{ 'blue' if kill[3] == 1 else 'red' }}">{{ kill[8] }}</span></a></td>
+            <td><a href="{{ url_for('player', name=kill[2]) }}"><span style="color: {{ 'blue' if kill[3] == 0 else 'red' }}">{{ kill[8] }}</span></a></td>
             <td>{{ kill[6] }}  {% if kill[7] == "True" %}<img src="{{ url_for('static', filename='favicon.ico') }}" width="15" height="15">{% endif %}</td>
-            <td><a href="{{ url_for('player', name=kill[4]) }}"><span style="color: {{ 'blue' if kill[5] == 1 else 'red' }}">{{ kill[9] }}</span></a></td>
+            <td><a href="{{ url_for('player', name=kill[4]) }}"><span style="color: {{ 'blue' if kill[5] == 0 else 'red' }}">{{ kill[9] }}</span></a></td>
 
         </tr>
         {% endfor %}

@@ -266,24 +266,24 @@ def save_Kill_data_to_db(data, server_name):
             """
             if 'KillData' in data:
                 killer_id = data['KillData']['Killer']
-                killed_by_id = data['KillData']['KilledBy']
+                killed_id = data['KillData']['Killed']
                 c.execute("SELECT name FROM player_name WHERE steam_id=? LIMIT 1", (killer_id,))
                 killer_row = c.fetchone()
                 if killer_row is None:
                     killer_name = get_player_name_from_id(killer_id)
                     c.execute("INSERT INTO player_name (steam_id, name) VALUES (?, ?)", (killer_id, killer_name))
                     print(f'if killer_row is None: killer_name = {killer_name}')
-                c.execute("SELECT name FROM player_name WHERE steam_id=? LIMIT 1", (killed_by_id,))
-                killed_by_row = c.fetchone()
-                if killed_by_row is None:
-                    killed_by_name = get_player_name_from_id(killed_by_id)
-                    c.execute("INSERT INTO player_name (steam_id, name) VALUES (?, ?)", (killed_by_id, killed_by_name))
+                c.execute("SELECT name FROM player_name WHERE steam_id=? LIMIT 1", (killed_id,))
+                killed_row = c.fetchone()
+                if killed_row is None:
+                    killed_by_name = get_player_name_from_id(killed_id)
+                    c.execute("INSERT INTO player_name (steam_id, name) VALUES (?, ?)", (killed_id, killed_by_name))
                     print(f'if killed_by_row is None: killed_by_row = {killed_by_name}')
                 c.execute(
                     f"INSERT INTO KillData (event, Timestamp, server, Killer, KillerTeamID, Killed, KilledTeamID, KilledBy, Headshot) "
                     f"VALUES ('KillData', '{data['Timestamp']}', '{server_name}', '{killer_id}', "
                     f"'{data['KillData']['KillerTeamID']}', '{data['KillData']['Killed']}', "
-                    f"'{data['KillData']['KilledTeamID']}', '{killed_by_id}', '{data['KillData']['Headshot']}')")
+                    f"'{data['KillData']['KilledTeamID']}', '{killed_id}', '{data['KillData']['Headshot']}')")
                 conn.commit()
         else:
             pass
@@ -400,12 +400,12 @@ def player(name):
     cur = conn.cursor()
 
     cur.execute("SELECT   mu.uniqueId_player, "
-                "playerName, "
+                "(SELECT name from player_name WHERE steam_id = uniqueId_player) AS player_name, "
                 "COUNT(mu.Timestamp) AS num_matches, "
-                "playerName, "
                 "SUM(COALESCE(mu.Kill, 0)) AS total_kill, "
                 "SUM(COALESCE(mu.Death, 0)) AS total_death, "
-                "ROUND(SUM(COALESCE(mu.Kill, 0)) / NULLIF(SUM(COALESCE(mu.Death, 0)), 0), 2) AS kill_death_ratio, "
+                #"ROUND(SUM(COALESCE(mu.Kill, 0)) / NULLIF(SUM(COALESCE(mu.Death, 0)), 0), 2) AS kill_death_ratio, "
+                "ROUND(SUM(COALESCE(mu.Kill, 0))/CAST(SUM(COALESCE(mu.Death, 0)) AS FLOAT), 2) AS kill_death_ratio, "
                 "SUM(COALESCE(mu.Assist, 0)) AS total_assist, "
                 "SUM(COALESCE(mu.Headshot, 0)) AS total_headshot, "
                 "ROUND(SUM(COALESCE(mu.Headshot, 0)) / CAST(SUM(COALESCE(mu.Kill, 0)) AS FLOAT) * 100 , 2) AS headshot_percent, "
@@ -474,11 +474,11 @@ def match(Timestamp):
     players = cur.fetchall()
 
     cur.execute(
-        "SELECT uniqueId_player, playerName, Kill, Death, Assist, Headshot, BombPlanted, Experience FROM match_users WHERE Timestamp = ? AND teamId = 0",
+        "SELECT uniqueId_player, (SELECT name from player_name WHERE steam_id = uniqueId_player), Kill, Death, Assist, Headshot, BombPlanted, Experience FROM match_users WHERE Timestamp = ? AND teamId = 0",
         (Timestamp,))
     players_team0 = cur.fetchall()
     cur.execute(
-        "SELECT uniqueId_player, playerName, Kill, Death, Assist, Headshot, BombPlanted, Experience FROM match_users WHERE Timestamp = ? AND teamId = 1",
+        "SELECT uniqueId_player, (SELECT name from player_name WHERE steam_id = uniqueId_player), Kill, Death, Assist, Headshot, BombPlanted, Experience FROM match_users WHERE Timestamp = ? AND teamId = 1",
         (Timestamp,))
     players_team1 = cur.fetchall()
     max_players_count = max(len(players_team0), len(players_team1))
